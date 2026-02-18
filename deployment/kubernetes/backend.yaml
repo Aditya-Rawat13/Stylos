@@ -1,0 +1,122 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stylos-backend
+  namespace: stylos-prod
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: stylos-backend
+  template:
+    metadata:
+      labels:
+        app: stylos-backend
+    spec:
+      containers:
+      - name: backend
+        image: stylos/backend:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: stylos-config
+              key: DATABASE_URL
+        - name: REDIS_URL
+          valueFrom:
+            configMapKeyRef:
+              name: stylos-config
+              key: REDIS_URL
+        - name: JWT_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: stylos-secrets
+              key: JWT_SECRET_KEY
+        - name: ENCRYPTION_KEY
+          valueFrom:
+            secretKeyRef:
+              name: stylos-secrets
+              key: ENCRYPTION_KEY
+        - name: BLOCKCHAIN_PRIVATE_KEY
+          valueFrom:
+            secretKeyRef:
+              name: stylos-secrets
+              key: BLOCKCHAIN_PRIVATE_KEY
+        - name: POLYGON_RPC_URL
+          valueFrom:
+            secretKeyRef:
+              name: stylos-secrets
+              key: POLYGON_RPC_URL
+        - name: ENVIRONMENT
+          valueFrom:
+            configMapKeyRef:
+              name: stylos-config
+              key: ENVIRONMENT
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        volumeMounts:
+        - name: model-storage
+          mountPath: /app/models
+          readOnly: true
+      volumes:
+      - name: model-storage
+        persistentVolumeClaim:
+          claimName: model-storage-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: stylos-backend-service
+  namespace: stylos-prod
+spec:
+  selector:
+    app: stylos-backend
+  ports:
+  - port: 8000
+    targetPort: 8000
+  type: ClusterIP
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: stylos-backend-hpa
+  namespace: stylos-prod
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: stylos-backend
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80

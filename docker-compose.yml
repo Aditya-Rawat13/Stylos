@@ -1,0 +1,121 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: trueauthor_postgres
+    environment:
+      POSTGRES_DB: trueauthor_prod
+      POSTGRES_USER: trueauthor_user
+      POSTGRES_PASSWORD: trueauthor_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    networks:
+      - trueauthor_network
+    restart: unless-stopped
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: trueauthor_redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - trueauthor_network
+    restart: unless-stopped
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: trueauthor_backend
+    environment:
+      - DATABASE_URL=postgresql://trueauthor_user:trueauthor_password@postgres:5432/trueauthor_prod
+      - REDIS_URL=redis://redis:6379/0
+      - DEBUG=false
+    volumes:
+      - ./backend:/app
+      - uploads_data:/app/uploads
+      - models_data:/app/models
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - trueauthor_network
+    restart: unless-stopped
+
+  # Frontend (React)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: trueauthor_frontend
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000/api/v1
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - trueauthor_network
+    restart: unless-stopped
+
+  # Celery Worker (for background tasks)
+  celery_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: trueauthor_celery_worker
+    command: celery -A core.celery worker --loglevel=info
+    environment:
+      - DATABASE_URL=postgresql://trueauthor_user:trueauthor_password@postgres:5432/trueauthor_prod
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - ./backend:/app
+      - uploads_data:/app/uploads
+      - models_data:/app/models
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - trueauthor_network
+    restart: unless-stopped
+
+  # Celery Beat (for scheduled tasks)
+  celery_beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: trueauthor_celery_beat
+    command: celery -A core.celery beat --loglevel=info
+    environment:
+      - DATABASE_URL=postgresql://trueauthor_user:trueauthor_password@postgres:5432/trueauthor_prod
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - ./backend:/app
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - trueauthor_network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  uploads_data:
+  models_data:
+
+networks:
+  trueauthor_network:
+    driver: bridge

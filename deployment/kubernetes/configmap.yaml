@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stylos-config
+  namespace: stylos-prod
+data:
+  DATABASE_URL: "postgresql://trueauthor_user:${DB_PASSWORD}@postgres-service:5432/trueauthor_prod"
+  REDIS_URL: "redis://redis-service:6379"
+  ENVIRONMENT: "production"
+  LOG_LEVEL: "INFO"
+  CORS_ORIGINS: "https://stylos.app,https://www.stylos.app"
+  JWT_ALGORITHM: "HS256"
+  BLOCKCHAIN_NETWORK: "polygon"
+  IPFS_GATEWAY: "https://ipfs.io/ipfs/"
+  MAX_FILE_SIZE: "10485760"  # 10MB
+  RATE_LIMIT_PER_MINUTE: "60"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: stylos-secrets
+  namespace: stylos-prod
+type: Opaque
+stringData:
+  JWT_SECRET_KEY: "${JWT_SECRET_KEY}"
+  DATABASE_PASSWORD: "${DB_PASSWORD}"
+  ENCRYPTION_KEY: "${ENCRYPTION_KEY}"
+  BLOCKCHAIN_PRIVATE_KEY: "${BLOCKCHAIN_PRIVATE_KEY}"
+  POLYGON_RPC_URL: "${POLYGON_RPC_URL}"
+  IPFS_PROJECT_ID: "${IPFS_PROJECT_ID}"
+  IPFS_PROJECT_SECRET: "${IPFS_PROJECT_SECRET}"
